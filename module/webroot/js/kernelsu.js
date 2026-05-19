@@ -13,16 +13,25 @@ function getFramework() {
   return null;
 }
 
+// Get the appropriate API object
+function getAPI() {
+  const framework = getFramework();
+  if (framework === 'ksu' && typeof ksu !== 'undefined') {
+    return ksu;
+  } else if (framework === 'apatch' && typeof apatch !== 'undefined') {
+    return apatch;
+  }
+  return null;
+}
+
 export function exec(command, options) {
   if (typeof options === "undefined") {
     options = {};
   }
 
   return new Promise((resolve, reject) => {
-    // Generate a unique callback function name
     const callbackFuncName = getUniqueCallbackName("exec");
-
-    // Define the success callback function
+    
     window[callbackFuncName] = (errno, stdout, stderr) => {
       resolve({ errno, stdout, stderr });
       cleanup(callbackFuncName);
@@ -33,17 +42,18 @@ export function exec(command, options) {
     }
 
     try {
-      const framework = getFramework();
+      const api = getAPI();
       
-      if (framework === 'ksu') {
-        ksu.exec(command, JSON.stringify(options), callbackFuncName);
-      } else if (framework === 'apatch') {
-        apatch.exec(command, JSON.stringify(options), callbackFuncName);
-      } else {
+      if (!api) {
         reject(new Error("No supported framework detected (KSU/APatch)"));
         cleanup(callbackFuncName);
+        return;
       }
+
+      // Both KSU and APatch use the same exec signature
+      api.exec(command, JSON.stringify(options), callbackFuncName);
     } catch (error) {
+      console.error("Exec error:", error);
       reject(error);
       cleanup(callbackFuncName);
     }
@@ -51,118 +61,114 @@ export function exec(command, options) {
 }
 
 function Stdio() {
-    this.listeners = {};
+  this.listeners = {};
+}
+
+Stdio.prototype.on = function (event, listener) {
+  if (!this.listeners[event]) {
+    this.listeners[event] = [];
+  }
+  this.listeners[event].push(listener);
+};
+
+Stdio.prototype.emit = function (event, ...args) {
+  if (this.listeners[event]) {
+    this.listeners[event].forEach((listener) => listener(...args));
+  }
+};
+
+function ChildProcess() {
+  this.listeners = {};
+  this.stdin = new Stdio();
+  this.stdout = new Stdio();
+  this.stderr = new Stdio();
+}
+
+ChildProcess.prototype.on = function (event, listener) {
+  if (!this.listeners[event]) {
+    this.listeners[event] = [];
+  }
+  this.listeners[event].push(listener);
+};
+
+ChildProcess.prototype.emit = function (event, ...args) {
+  if (this.listeners[event]) {
+    this.listeners[event].forEach((listener) => listener(...args));
+  }
+};
+
+export function spawn(command, args, options) {
+  if (typeof args === "undefined") {
+    args = [];
+  } else if (!(args instanceof Array)) {
+    options = args;
+    args = [];
   }
   
-  Stdio.prototype.on = function (event, listener) {
-    if (!this.listeners[event]) {
-      this.listeners[event] = [];
-    }
-    this.listeners[event].push(listener);
-  };
-  
-  Stdio.prototype.emit = function (event, ...args) {
-    if (this.listeners[event]) {
-      this.listeners[event].forEach((listener) => listener(...args));
-    }
-  };
-  
-  function ChildProcess() {
-    this.listeners = {};
-    this.stdin = new Stdio();
-    this.stdout = new Stdio();
-    this.stderr = new Stdio();
+  if (typeof options === "undefined") {
+    options = {};
   }
-  
-  ChildProcess.prototype.on = function (event, listener) {
-    if (!this.listeners[event]) {
-      this.listeners[event] = [];
-    }
-    this.listeners[event].push(listener);
-  };
-  
-  ChildProcess.prototype.emit = function (event, ...args) {
-    if (this.listeners[event]) {
-      this.listeners[event].forEach((listener) => listener(...args));
-    }
-  };
-  
-  export function spawn(command, args, options) {
-    if (typeof args === "undefined") {
-      args = [];
-    } else if (!(args instanceof Array)) {
-        // allow for (command, options) signature
-        options = args;
-    }
+
+  const child = new ChildProcess();
+  const childCallbackName = getUniqueCallbackName("spawn");
+  window[childCallbackName] = child;
+
+  function cleanup(name) {
+    delete window[name];
+  }
+
+  child.on("exit", code => {
+    cleanup(childCallbackName);
+  });
+
+  try {
+    const api = getAPI();
     
-    if (typeof options === "undefined") {
-      options = {};
-    }
-  
-    const child = new ChildProcess();
-    const childCallbackName = getUniqueCallbackName("spawn");
-    window[childCallbackName] = child;
-  
-    function cleanup(name) {
-      delete window[name];
-    }
-
-    child.on("exit", code => {
-        cleanup(childCallbackName);
-    });
-
-    try {
-      const framework = getFramework();
-      
-      if (framework === 'ksu') {
-        ksu.spawn(
-          command,
-          JSON.stringify(args),
-          JSON.stringify(options),
-          childCallbackName
-        );
-      } else if (framework === 'apatch') {
-        apatch.spawn(
-          command,
-          JSON.stringify(args),
-          JSON.stringify(options),
-          childCallbackName
-        );
-      } else {
-        child.emit("error", new Error("No supported framework detected (KSU/APatch)"));
-        cleanup(childCallbackName);
-      }
-    } catch (error) {
-      child.emit("error", error);
+    if (!api) {
+      child.emit("error", new Error("No supported framework detected (KSU/APatch)"));
       cleanup(childCallbackName);
+      return child;
     }
-    return child;
+
+    // Both KSU and APatch use the same spawn signature
+    api.spawn(
+      command,
+      JSON.stringify(args),
+      JSON.stringify(options),
+      childCallbackName
+    );
+  } catch (error) {
+    console.error("Spawn error:", error);
+    child.emit("error", error);
+    cleanup(childCallbackName);
   }
+  
+  return child;
+}
 
 export function fullScreen(isFullScreen) {
-  const framework = getFramework();
-  if (framework === 'ksu') {
-    ksu.fullScreen(isFullScreen);
-  } else if (framework === 'apatch') {
-    apatch.fullScreen(isFullScreen);
+  const api = getAPI();
+  if (api && api.fullScreen) {
+    api.fullScreen(isFullScreen);
   }
 }
 
 export function toast(message) {
-  const framework = getFramework();
-  if (framework === 'ksu') {
-    ksu.toast(message);
-  } else if (framework === 'apatch') {
-    apatch.toast(message);
+  const api = getAPI();
+  if (api && api.toast) {
+    api.toast(message);
   }
 }
 
 export function moduleInfo() {
-  const framework = getFramework();
-  if (framework === 'ksu') {
-    return ksu.moduleInfo();
-  } else if (framework === 'apatch') {
-    return apatch.moduleInfo();
+  const api = getAPI();
+  if (api && api.moduleInfo) {
+    try {
+      return api.moduleInfo();
+    } catch (error) {
+      console.error("moduleInfo error:", error);
+      return "{}";
+    }
   }
   return "{}";
 }
