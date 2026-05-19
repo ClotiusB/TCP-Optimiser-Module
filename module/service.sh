@@ -6,6 +6,20 @@ VOWIFI_CONNECT_TIME=10
 
 . $MODPATH/utils.sh # Load utils
 
+# Detect framework for logging
+detect_framework() {
+	if [ -n "$KSU" ]; then
+		echo "ksu"
+	elif [ -n "$APATCH" ] || grep -q "from.apatch" /proc/version 2>/dev/null; then
+		echo "apatch"
+	else
+		echo "magisk"
+	fi
+}
+
+FRAMEWORK=$(detect_framework)
+log_print "[INIT] Framework detected: $FRAMEWORK"
+
 # Get the list of available congestion control algorithms
 congestion_algorithms=$(cat /proc/sys/net/ipv4/tcp_available_congestion_control)
 
