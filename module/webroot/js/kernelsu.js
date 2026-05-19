@@ -3,6 +3,16 @@ function getUniqueCallbackName(prefix) {
   return `${prefix}_callback_${Date.now()}_${callbackCounter++}`;
 }
 
+// Framework detection - supports both KernelSU and APatch
+function getFramework() {
+  if (typeof ksu !== 'undefined') {
+    return 'ksu';
+  } else if (typeof apatch !== 'undefined') {
+    return 'apatch';
+  }
+  return null;
+}
+
 export function exec(command, options) {
   if (typeof options === "undefined") {
     options = {};
@@ -23,7 +33,16 @@ export function exec(command, options) {
     }
 
     try {
-      ksu.exec(command, JSON.stringify(options), callbackFuncName);
+      const framework = getFramework();
+      
+      if (framework === 'ksu') {
+        ksu.exec(command, JSON.stringify(options), callbackFuncName);
+      } else if (framework === 'apatch') {
+        apatch.exec(command, JSON.stringify(options), callbackFuncName);
+      } else {
+        reject(new Error("No supported framework detected (KSU/APatch)"));
+        cleanup(callbackFuncName);
+      }
     } catch (error) {
       reject(error);
       cleanup(callbackFuncName);
@@ -93,12 +112,26 @@ function Stdio() {
     });
 
     try {
-      ksu.spawn(
-        command,
-        JSON.stringify(args),
-        JSON.stringify(options),
-        childCallbackName
-      );
+      const framework = getFramework();
+      
+      if (framework === 'ksu') {
+        ksu.spawn(
+          command,
+          JSON.stringify(args),
+          JSON.stringify(options),
+          childCallbackName
+        );
+      } else if (framework === 'apatch') {
+        apatch.spawn(
+          command,
+          JSON.stringify(args),
+          JSON.stringify(options),
+          childCallbackName
+        );
+      } else {
+        child.emit("error", new Error("No supported framework detected (KSU/APatch)"));
+        cleanup(childCallbackName);
+      }
     } catch (error) {
       child.emit("error", error);
       cleanup(childCallbackName);
@@ -107,13 +140,29 @@ function Stdio() {
   }
 
 export function fullScreen(isFullScreen) {
-  ksu.fullScreen(isFullScreen);
+  const framework = getFramework();
+  if (framework === 'ksu') {
+    ksu.fullScreen(isFullScreen);
+  } else if (framework === 'apatch') {
+    apatch.fullScreen(isFullScreen);
+  }
 }
 
 export function toast(message) {
-  ksu.toast(message);
+  const framework = getFramework();
+  if (framework === 'ksu') {
+    ksu.toast(message);
+  } else if (framework === 'apatch') {
+    apatch.toast(message);
+  }
 }
 
 export function moduleInfo() {
-  return ksu.moduleInfo();
+  const framework = getFramework();
+  if (framework === 'ksu') {
+    return ksu.moduleInfo();
+  } else if (framework === 'apatch') {
+    return apatch.moduleInfo();
+  }
+  return "{}";
 }
