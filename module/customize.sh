@@ -12,6 +12,19 @@ else
     ui_print " [+] BBR not found. Going with Cubic!"
 fi
 
+# Detect framework (Magisk, KernelSU, or APatch)
+ui_print " [+] Detecting module framework..."
+if [ -n "$KSU" ]; then
+    ui_print " [+] KernelSU detected!"
+    FRAMEWORK="ksu"
+elif [ -n "$APATCH" ] || grep -q "from.apatch" /proc/version 2>/dev/null; then
+    ui_print " [+] APatch detected!"
+    FRAMEWORK="apatch"
+else
+    ui_print " [+] Magisk detected!"
+    FRAMEWORK="magisk"
+fi
+
 MODULE_NAME=$(basename "$MODPATH")
 MODULE_PATH="/data/adb/modules/$MODULE_NAME"
 
@@ -38,8 +51,8 @@ create_file_if_needed() {
     local target="$MODPATH/${prefix}_${suffix}"
 
     if check_exists_anywhere "$prefix"; then
-        # If file exists and KSU is true, copy any file from MODULEPATH with the same prefix
-        if [ "$KSU" = true ]; then
+        # If file exists and framework supports it, copy any file from MODULEPATH with the same prefix
+        if [ "$FRAMEWORK" = "ksu" ] || [ "$FRAMEWORK" = "apatch" ]; then
             # Find any file starting with ${prefix}_ in MODULEPATH and copy it to MODPATH
             source_file=$(find "$MODULE_PATH" -name "${prefix}_*" -print -quit)
             if [ -n "$source_file" ]; then
@@ -73,8 +86,8 @@ fi
 create_file_if_needed "rmnet_data" "cubic"
 
 if check_exists_anywhere "kill"; then
-    # If file exists and KSU is true, copy any file from MODULEPATH with the same prefix
-    if [ "$KSU" = true ]; then
+    # If file exists and framework supports it, copy any file from MODULEPATH with the same prefix
+    if [ "$FRAMEWORK" = "ksu" ] || [ "$FRAMEWORK" = "apatch" ]; then
         # Find any file starting with ${prefix}_ in MODULEPATH and copy it to MODPATH
         source_file=$(find "$MODULE_PATH" -name "kill_connections" -print -quit)
         if [ -n "$source_file" ]; then
@@ -87,8 +100,8 @@ if check_exists_anywhere "kill"; then
 fi
 
 if check_exists_anywhere "initcwnd"; then
-    # If file exists and KSU is true, copy any file from MODULEPATH with the same prefix
-    if [ "$KSU" = true ]; then
+    # If file exists and framework supports it, copy any file from MODULEPATH with the same prefix
+    if [ "$FRAMEWORK" = "ksu" ] || [ "$FRAMEWORK" = "apatch" ]; then
         # Find any file starting with ${prefix}_ in MODULEPATH and copy it to MODPATH
         source_file=$(find "$MODULE_PATH" -name "initcwnd_initrwnd" -print -quit)
         if [ -n "$source_file" ]; then
@@ -99,3 +112,5 @@ if check_exists_anywhere "initcwnd"; then
         ui_print " [-] Skipping $MODPATH/initcwnd_initrwnd: file already exists."
     fi
 fi
+
+ui_print " [+] Framework: $FRAMEWORK"
