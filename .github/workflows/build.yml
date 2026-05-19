@@ -17,9 +17,14 @@ on:
 jobs:
   build-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Read current module.prop
         id: read_version
@@ -56,11 +61,14 @@ jobs:
           
           cat module.prop
 
+      - name: Configure Git
+        run: |
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
       - name: Commit updated module.prop
         run: |
           cd ./module
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
           git add module.prop
           git commit -m "Bump version to ${{ env.new_version }} (${{ env.new_versioncode }})"
           git push origin HEAD:${{ github.ref_name }}
@@ -82,22 +90,13 @@ jobs:
           path: "*.zip"
 
       - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ env.new_version }}
-          release_name: ${{ env.new_version }}
+          name: ${{ env.new_version }}
           draft: true
-          prerelease: ${{ github.ref == 'refs/heads/main' && 'false' || 'true' }}
-
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
+          prerelease: ${{ github.ref != 'refs/heads/main' }}
+          files: |
+            ./TCP_Optimiser-${{ env.new_version }}-${{ env.new_versioncode }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./TCP_Optimiser-${{ env.new_version }}-${{ env.new_versioncode }}.zip
-          asset_name: TCP_Optimiser-${{ env.new_version }}-${{ env.new_versioncode }}.zip
-          asset_content_type: application/zip
