@@ -4,5 +4,4 @@ version=6.4
 versionCode=18
 author=fatalcoder524
 description=TCP Optimisations & update tcp_cong_algo based on interface | Supports KernelSU/APatch/Magisk
-updateJson=https://raw.githubusercontent.com/ClotiusB/TCP-Optimiser-Module/main/update.json
 banner=https://raw.githubusercontent.com/fatalcoder524/TCP_Optimiser_Module/main/banner.png
